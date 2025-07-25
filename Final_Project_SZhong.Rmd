@@ -1,0 +1,208 @@
+---
+title: "ECON 4001 R Coding Final"
+author: "S. Zhong"
+date: "2025-07-29"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(stringr)
+library(rmarkdown)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include = FALSE}
+getwd()
+```
+
+# What Proportion of LEGO Products Coincide with the Star Wars Brand for Each Year from 2000-2023?
+
+#### Sean Zhong
+
+#### Professor Suneye Holmes, Summer 2025
+
+
+#### Abstract
+
+This project aims to answer the question "What proportion of LEGO’s total products coincide with the Star Wars brand for each year from 2000-2023?”. The utilized data source is from kaggle, a public domain data platform, and the specific dataset used is "LEGO Sets & Themes Database (1949-2023)". Relevant sources and datasets are listed below. This project is also available on my GitHub profile, @seanzhong7 under the test-repo repository. I have also linked this below.
+
+#### Citations
+
+Kraayenbrink, J. (2023). *LEGO Sets & Themes Database (1949–2023)*. Retrieved from [Kaggle](https://www.kaggle.com/datasets/jkraak/lego-sets-and-themes-database)
+
+Turner-Wharfe, C. (2024, April 25). *Tracing 25 years of LEGO Star Wars sets, from the weird to the wonderful*. Retrieved from [Brick Fanatics](https://www.brickfanatics.com/tracing-25-years-of-lego-star-wars-sets/)
+
+[***Github Link***](https://github.com/seanzhong7)
+
+\newpage
+
+### Table of Contents
+
+1. ***Background*** - Project Explanation and Inspiration
+
+2. ***Data Deep Dive*** - Goals for Cleaning, Processing, Content Exploration
+
+3. ***Generated Analysis*** - Goals for Visualization and Tables
+
+4. ***Reflection and Next Steps***
+
+\newpage
+
+### Background
+
+First, to give some background on this topic, Star Wars is a series which has a popular subset of LEGO products thanks to its new showings each year. New products linked to the Star Wars brand have been created and manufactured every year since 1999 (Turner-Wharfe), and always make up a certain proportion of LEGO's new sets. At the bottom of the abstract is the citation for an article that provides further context of famous Star Wars sets throughout the years and how the series' production coincided with LEGO releases.
+
+I am curious about the total proportion of LEGO's pipeline that Star Wars product manufacturing makes up each year. Growing up, I played with LEGOs a lot, and I continue to look at the newly created sets whenever I pass a LEGO store. Many of the LEGO sub-brands from my childhood (e.g. LEGO Chima, LEGO Bionicle, LEGO Atlantis) have been phased out, but I continue to see new Star Wars sets. This sparked my interest in trying to quantify Star Wars' role in overall LEGO success, and the availability of public domain data of yearly LEGO production makes this research question possible.
+
+The data source I am pulling information from is cited at the bottom of the abstract as well, where I am pulling a single dataset. This dataset, "LEGO Sets & Themes Database (1949-2023)" features key columns and identifying rows that allow for me to quantify the total number of new Star Wars sets that are released each year, as well as the total number of new LEGO sets.
+
+### Data Deep Dive
+
+Before I begin the data processing, I want to provide a few summary statistics that may be of interest to you.
+
+```{r, import, include = FALSE}
+dataset <- read_csv("Data/Raw/lego_sets_and_themes.csv", show_col_types = FALSE)
+```
+
+```{r, sumstats}
+summary(dataset)
+```
+
+Of these basic, pre-processed summary statistics, only a few things are useful/meaningful. To interpret some of this, it can be seen that our dataset features 21503 unique LEGO sets. Although sets were created as far back as 1949, the majority (75%) of sets were created between 2001-2023 based on the max year and 1st quartile. Additionally, 50% of LEGO's total created sets were created from 2012 onwards, showing how the company has grown tremendously in the 21st century. We can also see that there are 7 sets with no release year parameter, which I will handle in the processing step.
+
+\newpage
+
+I would also like to elaborate on the columns I will use before I begin. The set_number column features rows with a unique identifier for each LEGO set, formatted as "~-1”, where “~” represents a unique number. The theme_name column features rows with the series/brand that a LEGO set falls under (e.g. Star Wars, Harry Potter, Lord of the Rings, etc.). The year_released column features rows with the year that the LEGO set was created and put on the market. The set_name, image_url, and number_of_parts columns will not be used to answer this question.
+
+#### Processing Steps
+
+The processing steps necessary to answer this research question involve creating separate, filtered data frames to gather relevant information. Firstly, I want to see the sets that do not have a year_released value in order to make a decision on how to handle these nulls.
+
+```{r, nulls}
+print(dataset[is.na(dataset$year_released),])
+```
+
+Since none of these 7 rows have any other identifying information asides from their theme_name, I will simply complete this project without these values. Regardless of when these mystery 7 sets were created, the per-year proportion of LEGO sets comprised by Star Wars will not be significantly affected.
+
+To start the cleaning, I will remove all unused columns and filter out sets created before 2000, keeping sets of all themes.
+
+```{r, filter-1, include = TRUE}
+dataset <- dataset |> select(set_number, theme_name, year_released)
+dataset_2000_onwards <- filter(dataset, year_released >= 2000)
+head(dataset_2000_onwards)
+```
+
+The set numbers now need to be grouped by year, and a count of the number of unique sets per year should be taken.
+
+This new dataframe contains data on all of the sets that are pertinent to this exploration. A second dataframe will need to be created via filtering dataset_2000_onwards, featuring only the Star Wars sets.
+
+```{r, filter-2, include = TRUE}
+is_star_wars <- str_detect(dataset_2000_onwards$theme_name, "Star Wars")
+dataset_only_star_wars <- filter(dataset_2000_onwards, is_star_wars)
+head(dataset_only_star_wars)
+```
+
+I now need to group the LEGO sets in both dataframes by the year they were released so that I can count the unique sets that were created each year.
+
+```{r, group-1, include = TRUE}
+sets_yearly <- dataset_2000_onwards |>
+  group_by(year_released) |>
+  summarise(unique_sets = n_distinct(set_number))
+```
+
+```{r, group-2, include = TRUE}
+star_wars_yearly <- dataset_only_star_wars|>
+  group_by(year_released) |>
+  summarise(unique_star_wars_sets = n_distinct(set_number))
+```
+
+I will now combine both grouped sets into one table using the join function in the dplyr library. I also am adding a calculated column of the proportion of new LEGO sets belonging to the Star Wars brand, which is solved with a simple calculation of (unique_star_wars_sets)/(unique_sets).
+
+```{r, table-1, include = TRUE}
+table1 <- left_join(sets_yearly, star_wars_yearly, by = "year_released") |>
+  mutate(proportion_star_wars = round(unique_star_wars_sets / unique_sets,3)) |>
+  arrange(year_released)
+knitr::kable(table1)
+```
+
+Above, I am using the knitr syntax in order to create a non-truncated version of the table that you see. When simply writing "table1" on its own line of code, RMarkdown will not show the entirety of the table, when it is quite important to see each row. This knitr syntax was mostly new to me, but I found its utility for this scenario by looking up ways to make a full table appear in RMarkdown.
+
+Now that the data processing is done, I will compare what I perceived was necessary during the midterm to what I ended up doing. Looking back, I think I had a very solid understanding of the processing that needed to be done. I followed my general procedure to a tee, and ended up using every function and library that I expected to use in the processing stage. The only unexpected, largely self-taught workaround was using the knitr package and kable() function in order to display the above table. Otherwise, this course taught me everything that I used in my processing, and I am pleased with how the cleaned data table turned out.
+
+\newpage
+
+### Generated Analysis
+
+The visualizations I will generate are as follows: 
+
+1. A year-by-year double bar chart broken down into a column showing the total unique LEGO sets manufactured and a second showing the total unique Star Wars-specific sets manufactured.
+
+2. A year-by-year single column bar chart showing the total unique Star Wars-specific sets manufactured.
+
+3. A line chart plotting the proportion of LEGO's annual sets that coincide with Star Wars branding.
+
+```{r, viz-1, include = TRUE}
+ggplot(aes(x = factor(year_released)), data = table1) +
+  geom_col(aes(y = unique_sets, fill = "Total LEGO Sets"), 
+           position = position_nudge(x = -0.1), width = 0.2) +
+  geom_col(aes(y = unique_star_wars_sets, fill = "Star Wars Sets"), 
+           position = position_nudge(x = 0.1), width = 0.2) +
+  scale_fill_manual(name = "Key", values = 
+            c("Total LEGO Sets" = "blue", "Star Wars Sets" = "orange")) +
+  labs(title = "Unique LEGO Sets vs. Star Wars Sets from 2000-2023") + 
+  xlab("Year") +
+  ylab("Number of Unique Sets") + 
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+To give a quick briefing on the code I used to generate this plot, I once again ended up using every function from the ggplot2 library that I had mentioned in my midterm write up. An additional few functions that I had to use included factor(), which changed the year_released values into factors. Without this function, not every year in the x-axis of the plot was displayed, with R opting to only include the years divisible by 5. Additionally, geom_col() was a function I researched while writing my midterm write-up, and it is beyond the scope of what was taught in lecture. Using the function allows me to easily create multiple columns in this visualization. I also chose to use another new function, position_nudge() which I read about in online forums from individuals attempting to create similar plots. I had already understood that the double bar chart I was creating would require assigning arbitrary coordinates to the different bars, so the incorporation of this function made sense to me. I also needed to turn my x-axis year labels vertical for legibility, which I did using the element_text() function that I found with a quick lookup.
+
+Upon generating this double-bar chart visualization, I realize that it does not effectively show a year-by-year breakdown of the number of unique Star Wars sets created, because the bars showcasing total new LEGO sets is so much larger, making the number of released Star Wars sets look minimized in comparison. However, this double bar chart does effectively show the growth of LEGO throughout the years, with the upward trend of more and more LEGO sets being created. Although this research question is not focused on the change in the amount of Star Wars LEGO sets created each year, I think it this provides important context, which is why I have included the next visualization. 
+
+```{r, viz-2, include = TRUE}
+ggplot(aes(x = factor(year_released)), data = table1) +
+  geom_col(aes(y=unique_star_wars_sets, fill = "Star Wars Sets"), 
+           width = 0.3) +
+  scale_fill_manual(name = "Key", values = ("Star Wars Sets" = "orange")) +
+  labs(title = "# Star Wars LEGO Sets Created from 2000-2023") + 
+  xlab("Year") + 
+  ylab("Number of Unique Sets") +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+The functions from the ggplot2 library to generate this bar plot were the same as the ones used to generate the previous double-bar chart, and the chart formatting is essentially analogous.
+
+This new plot provides a much better visualization of how the number of Star Wars sets created varies from year-to-year. The results are quite interesting. Although I associate Star Wars with the late 2000's and early 2010's, the number of sets created each year actually increases and peaks around the late 2010's. This likely can be explained by the growth of LEGO as a whole though, as the increasing trends seen in the Star Wars-only bar chart coincide with the growth on the previous double bar chart. 
+
+The last visualization I plan to generate is the line chart showing the annual changes in Star Wars' proportion of the LEGO pipeline. Although it can be seen that the number of Star Wars sets overall increased year-by-year, I would like to see if this is a result of a change in LEGO's bandwidth dedication to Star Wars or just a result of LEGO growing.
+
+```{r, viz-3, include = TRUE}
+ggplot(aes(x= factor(year_released), y = proportion_star_wars), data = table1) +
+  geom_point() +
+  labs(title = "Proportion of LEGO Products with Star Wars Branding from 2000-2023") + 
+  xlab("Year") +
+  ylab("Proportion Star Wars Products") +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+This final visualization was created entirely with functions from the ggplot2 library that were discussed in lecture. Although I stated this would be a line plot originally, a view of the datapoints reveals that a scatter plot is a much better visualization. 
+
+As can be seen, there really is no trend between years and the proportion of Star Wars products. A few insights to be drawn from this are that from 2015-2019, LEGO's focus on producing Star Wars sets was noticeably higher compared to other years, but asides from that, there is no other period of time where high bandwidth was given to Star Wars. This plot really goes to show how much LEGO has been able to grow as a brand, as even though the number of new Star Wars sets has increased as a whole from 2000-2023, Star Wars has not grown in its consumption of LEGO bandwidth. 
+
+Overall, the goals for visualization that I had established in my midterm write-up were achieved. I was able to create the double bar chart that I had envisioned, as well as my percentage/proportion graphs. I did not struggle much in the creation of these plots, as my visualizations were relatively basic, and any tricky points I encountered had long been resolved by others in online forums. I do think that this is what I would encounter in future uses of RStudio as well, as any visualization I could hope to create has likely already been generated by someone previously.
+
+\newpage
+
+### Reflection and Next Steps
+
+I think that the conclusions I was able to arrive at through this project were interesting and thoughtful.
+
+Another interesting aspect of determining the prominence of Star Wars' contributions to LEGO's success would be determining the proportion of LEGO's revenue that is brought in from Star Wars sets each year. Although that project is a logical extension of this research question, I think it would be difficult to find publicly available data on LEGO's revenues from year-to-year, and more difficult to break down the revenue from just Star Wars products. A more feasible future research topic would be diving deep into Star Wars' role in the actual LEGO piece manufacturing by comparing the number of pieces produced for each Star Wars set versus LEGO's overall piece production as a whole.
+
+Overall, I highly enjoyed this project and utilizing R for a personal study.
